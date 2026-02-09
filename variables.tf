@@ -1,4 +1,4 @@
-variable "region" {
+variable "aws_region" {
   type = string
 }
 
@@ -10,8 +10,8 @@ variable "s3_object_key" {
   type = string
 }
 
-variable "lambda_zip_path" {
-  description = "Absolute path to the lambda ZIP provided by Octopus"
+variable "lambda_source_dir" {
+  description = "Directory extracted by Octopus"
   type        = string
 }
 
@@ -20,7 +20,6 @@ variable "api_gateway_name" {
 }
 
 variable "lambda_configs" {
-  description = "Lambda configuration map"
   type = map(object({
     method = string
     path   = string
