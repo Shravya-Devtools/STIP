@@ -6,27 +6,18 @@ data "aws_iam_role" "lambda_role" {
 }
 
 ############################################
-# ZIP THE OCTOPUS-EXTRACTED FOLDER
-############################################
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_dir = var.lambda_source_dir
-  output_path = "${path.module}/lambda.zip"
-}
-
-############################################
-# UPLOAD ZIP TO S3
+# UPLOAD ZIP (FROM OCTOPUS) TO S3
 ############################################
 resource "aws_s3_object" "lambda_zip" {
   bucket = var.s3_bucket_name
   key    = var.s3_object_key
-  source = data.archive_file.lambda_zip.output_path
+  source = var.lambda_zip_path
 
-  etag = filemd5(data.archive_file.lambda_zip.output_path)
+  etag = filemd5(var.lambda_zip_path)
 }
 
 ############################################
-# LAMBDA FUNCTIONS
+# LAMBDA FUNCTIONS (MULTIPLE FROM SAME ZIP)
 ############################################
 resource "aws_lambda_function" "lambda" {
   for_each = var.lambda_configs
@@ -37,7 +28,7 @@ resource "aws_lambda_function" "lambda" {
   handler       = "index.handler"
 
   s3_bucket = var.s3_bucket_name
-  s3_key    = var.s3_object_key
+  s3_key    = aws_s3_object.lambda_zip.key
 
   depends_on = [aws_s3_object.lambda_zip]
 }
