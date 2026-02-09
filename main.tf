@@ -1,36 +1,29 @@
-############################
-# Step 1: Download ZIP from JFrog
-############################
-resource "null_resource" "download_zip" {
+############################################
+resource "null_resource" "jfrog_to_s3" {
+  triggers = {
+    artifact_url = var.jfrog_url
+  }
+
   provisioner "local-exec" {
-    interpreter = ["PowerShell", "-Command"]
-    command = <<-EOT
-$headers = @{
-  Authorization = "Bearer ${trimspace(var.jfrog_password)}"
-}
-Invoke-WebRequest `
-  -Uri "${trimspace(var.jfrog_url)}" `
-  -Headers $headers `
-  -OutFile "lambda.zip"
+    command = <<EOT
+set -euo pipefail
+
+echo "Downloading from JFrog and uploading to S3..."
+
+curl -fL \
+  -H "Authorization: Bearer ${trimspace(var.jfrog_password)}" \
+  "${trimspace(var.jfrog_url)}" \
+| aws s3 cp - s3://${var.s3_bucket_name}/${var.s3_object_key}
+
+echo "Verifying object exists in S3..."
+aws s3 ls s3://${var.s3_bucket_name}/${var.s3_object_key}
 EOT
   }
 }
 
 ############################
-# Step 2: Upload ZIP to S3
+# Step 3: USE EXISTING IAM ROLE
 ############################
-resource "aws_s3_object" "lambda_zip" {
-  bucket = var.s3_bucket_name
-  key    = var.s3_object_key
-  source = "lambda.zip"
-
-  depends_on = [null_resource.download_zip]
-}
-
-############################
-# Step 3: USE EXISTING IAM ROLE & POLICY
-############################
-
 data "aws_iam_role" "lambda_role" {
   name = "lambda-execution-role"
 }
@@ -47,7 +40,10 @@ resource "aws_lambda_function" "lambda" {
   handler       = "index.handler"
 
   s3_bucket = var.s3_bucket_name
-  s3_key    = aws_s3_object.lambda_zip.key
+  s3_key    = var.s3_object_key
+
+  # Critical: Wait for the S3 upload to finish before trying to create Lambda
+  depends_on = [null_resource.jfrog_to_s3]
 }
 
 ############################
@@ -59,7 +55,7 @@ resource "aws_apigatewayv2_api" "api" {
 }
 
 ############################
-# Step 6: Integrations (ALL Lambdas)
+# Step 6: Integrations
 ############################
 resource "aws_apigatewayv2_integration" "integration" {
   for_each = aws_lambda_function.lambda
@@ -90,7 +86,7 @@ resource "aws_apigatewayv2_stage" "stage" {
 }
 
 ############################
-# Step 9: Permissions
+# Step 9: Lambda Permissions
 ############################
 resource "aws_lambda_permission" "allow_apigw" {
   for_each = aws_lambda_function.lambda
