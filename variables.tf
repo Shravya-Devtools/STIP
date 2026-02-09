@@ -19,8 +19,8 @@ variable "s3_object_key" {
 ################################
 # Artifact from Octopus
 ################################
-variable "lambda_zip_path" {
-  description = "Local filesystem path to the Lambda ZIP extracted by Octopus"
+variable "lambda_source_dir" {
+  description = "Local directory path extracted by Octopus containing Lambda code"
   type        = string
 }
 
