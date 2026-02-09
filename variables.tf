@@ -7,7 +7,7 @@ variable "aws_region" {
 }
 
 variable "s3_bucket_name" {
-  description = "Existing S3 bucket where Lambda ZIP is uploaded"
+  description = "Existing S3 bucket where Lambda ZIP will be uploaded"
   type        = string
 }
 
@@ -17,17 +17,11 @@ variable "s3_object_key" {
 }
 
 ################################
-# JFrog
+# Artifact from Octopus
 ################################
-variable "jfrog_url" {
-  description = "JFrog artifact ZIP download URL"
+variable "lambda_zip_path" {
+  description = "Local filesystem path to the Lambda ZIP extracted by Octopus"
   type        = string
-}
-
-variable "jfrog_password" {
-  description = "JFrog access token (Bearer token)"
-  type        = string
-  sensitive   = true
 }
 
 ################################
