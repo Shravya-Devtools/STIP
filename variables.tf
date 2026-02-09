@@ -1,42 +1,26 @@
-################################
-# AWS
-################################
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
+variable "region" {
+  type = string
 }
 
 variable "s3_bucket_name" {
-  description = "Existing S3 bucket where Lambda ZIP will be uploaded"
-  type        = string
+  type = string
 }
 
 variable "s3_object_key" {
-  description = "S3 object key (path) for the Lambda ZIP"
+  type = string
+}
+
+variable "lambda_zip_path" {
+  description = "Absolute path to the lambda ZIP provided by Octopus"
   type        = string
 }
 
-################################
-# Artifact from Octopus
-################################
-variable "lambda_source_dir" {
-  description = "Local directory path extracted by Octopus containing Lambda code"
-  type        = string
-}
-
-################################
-# API Gateway
-################################
 variable "api_gateway_name" {
-  description = "Name of the API Gateway HTTP API"
-  type        = string
+  type = string
 }
 
-################################
-# Lambda + API Routing
-################################
 variable "lambda_configs" {
-  description = "Lambda name mapped to HTTP method and API path"
+  description = "Lambda configuration map"
   type = map(object({
     method = string
     path   = string
