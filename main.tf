@@ -6,18 +6,27 @@ data "aws_iam_role" "lambda_role" {
 }
 
 ############################################
-# Upload ZIP to S3 (FROM OCTOPUS PATH)
+# ZIP THE OCTOPUS-EXTRACTED FOLDER
+############################################
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_dir = var.lambda_source_dir
+  output_path = "${path.module}/lambda.zip"
+}
+
+############################################
+# UPLOAD ZIP TO S3
 ############################################
 resource "aws_s3_object" "lambda_zip" {
   bucket = var.s3_bucket_name
   key    = var.s3_object_key
-  source = var.lambda_zip_path
+  source = data.archive_file.lambda_zip.output_path
 
-  etag = filemd5(var.lambda_zip_path)
+  etag = filemd5(data.archive_file.lambda_zip.output_path)
 }
 
 ############################################
-# Lambda Functions
+# LAMBDA FUNCTIONS
 ############################################
 resource "aws_lambda_function" "lambda" {
   for_each = var.lambda_configs
@@ -34,7 +43,7 @@ resource "aws_lambda_function" "lambda" {
 }
 
 ############################################
-# API Gateway
+# API GATEWAY
 ############################################
 resource "aws_apigatewayv2_api" "api" {
   name          = var.api_gateway_name
@@ -42,7 +51,7 @@ resource "aws_apigatewayv2_api" "api" {
 }
 
 ############################################
-# API Integrations
+# API INTEGRATIONS
 ############################################
 resource "aws_apigatewayv2_integration" "integration" {
   for_each = aws_lambda_function.lambda
@@ -53,7 +62,7 @@ resource "aws_apigatewayv2_integration" "integration" {
 }
 
 ############################################
-# Routes
+# ROUTES
 ############################################
 resource "aws_apigatewayv2_route" "route" {
   for_each = var.lambda_configs
@@ -64,7 +73,7 @@ resource "aws_apigatewayv2_route" "route" {
 }
 
 ############################################
-# Stage
+# STAGE
 ############################################
 resource "aws_apigatewayv2_stage" "stage" {
   api_id      = aws_apigatewayv2_api.api.id
@@ -73,7 +82,7 @@ resource "aws_apigatewayv2_stage" "stage" {
 }
 
 ############################################
-# Lambda Permissions
+# LAMBDA PERMISSIONS
 ############################################
 resource "aws_lambda_permission" "allow_apigw" {
   for_each = aws_lambda_function.lambda
