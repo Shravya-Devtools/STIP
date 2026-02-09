@@ -1,14 +1,86 @@
-terraform {
-  required_version = "~> 1.4"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.40"
-    }
-  }
+############################################
+# IAM ROLE (EXISTING)
+############################################
+data "aws_iam_role" "lambda_role" {
+  name = "lambda-execution-role"
 }
 
-provider "aws" {
-  region = var.aws_region
+############################################
+# Upload ZIP to S3 (FROM OCTOPUS PATH)
+############################################
+resource "aws_s3_object" "lambda_zip" {
+  bucket = var.s3_bucket_name
+  key    = var.s3_object_key
+  source = var.lambda_zip_path
+
+  etag = filemd5(var.lambda_zip_path)
+}
+
+############################################
+# Lambda Functions
+############################################
+resource "aws_lambda_function" "lambda" {
+  for_each = var.lambda_configs
+
+  function_name = each.key
+  role          = data.aws_iam_role.lambda_role.arn
+  runtime       = "python3.10"
+  handler       = "index.handler"
+
+  s3_bucket = var.s3_bucket_name
+  s3_key    = var.s3_object_key
+
+  depends_on = [aws_s3_object.lambda_zip]
+}
+
+############################################
+# API Gateway
+############################################
+resource "aws_apigatewayv2_api" "api" {
+  name          = var.api_gateway_name
+  protocol_type = "HTTP"
+}
+
+############################################
+# API Integrations
+############################################
+resource "aws_apigatewayv2_integration" "integration" {
+  for_each = aws_lambda_function.lambda
+
+  api_id           = aws_apigatewayv2_api.api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = each.value.invoke_arn
+}
+
+############################################
+# Routes
+############################################
+resource "aws_apigatewayv2_route" "route" {
+  for_each = var.lambda_configs
+
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "${each.value.method} ${each.value.path}"
+  target    = "integrations/${aws_apigatewayv2_integration.integration[each.key].id}"
+}
+
+############################################
+# Stage
+############################################
+resource "aws_apigatewayv2_stage" "stage" {
+  api_id      = aws_apigatewayv2_api.api.id
+  name        = "$default"
+  auto_deploy = true
+}
+
+############################################
+# Lambda Permissions
+############################################
+resource "aws_lambda_permission" "allow_apigw" {
+  for_each = aws_lambda_function.lambda
+
+  statement_id  = "AllowApiGateway-${each.key}"
+  action        = "lambda:InvokeFunction"
+  function_name = each.value.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
 }
