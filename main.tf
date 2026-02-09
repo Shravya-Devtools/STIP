@@ -41,3 +41,9 @@ resource "aws_lambda_function" "lambda" {
 
   depends_on = [aws_s3_object.lambda_zip]
 }
+
+
+output "debug_lambda_source_dir" {
+  value = var.lambda_source_dir
+}
+
