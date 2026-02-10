@@ -26,7 +26,7 @@ resource "aws_s3_object" "lambda_zip" {
 }
 
 ############################################
-# LAMBDA FUNCTIONS
+# LAMBDA FUNCTIONS 
 ############################################
 resource "aws_lambda_function" "lambda" {
   for_each = var.lambda_configs
@@ -42,8 +42,66 @@ resource "aws_lambda_function" "lambda" {
   depends_on = [aws_s3_object.lambda_zip]
 }
 
+############################################
+# API GATEWAY v2 (HTTP API) 
+############################################
+resource "aws_apigatewayv2_api" "api" {
+  name          = var.api_gateway_name
+  protocol_type = "HTTP"
+}
 
+############################################
+# INTEGRATIONS (ALL LAMBDAS) 
+############################################
+resource "aws_apigatewayv2_integration" "integration" {
+  for_each = aws_lambda_function.lambda
+
+  api_id                 = aws_apigatewayv2_api.api.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = each.value.invoke_arn
+  payload_format_version = "2.0"
+}
+
+############################################
+# ROUTES 
+############################################
+resource "aws_apigatewayv2_route" "route" {
+  for_each = var.lambda_configs
+
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "${each.value.method} ${each.value.path}"
+  target    = "integrations/${aws_apigatewayv2_integration.integration[each.key].id}"
+}
+
+############################################
+# STAGE 
+############################################
+resource "aws_apigatewayv2_stage" "stage" {
+  api_id      = aws_apigatewayv2_api.api.id
+  name        = "$default"
+  auto_deploy = true
+}
+
+############################################
+# LAMBDA PERMISSIONS 
+############################################
+resource "aws_lambda_permission" "allow_apigw" {
+  for_each = aws_lambda_function.lambda
+
+  statement_id  = "AllowApiGateway-${each.key}"
+  action        = "lambda:InvokeFunction"
+  function_name = each.value.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
+}
+
+############################################
+# OUTPUTS 
+############################################
 output "debug_lambda_source_dir" {
   value = var.lambda_source_dir
 }
 
+output "api_gateway_endpoint" {
+  value = aws_apigatewayv2_api.api.api_endpoint
+}
